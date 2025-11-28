@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Treasure Run</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      background: #111;
+      color: #fff;
+    }
+
+    /* HUD */
+    #hud {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 5;
+      display: none;
+    }
+    #hud div {
+      font-size: 20px;
+      margin-bottom: 6px;
+      text-shadow: 0 2px 6px rgba(0,0,0,0.7);
+    }
+
+    /* Main Menu */
+    #menu {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background: linear-gradient(135deg, #0b0b0b, #222, #0b0b0b);
+      z-index: 10;
+      text-align: center;
+      overflow: hidden;
+    }
+    #menu h1 {
+      font-size: 60px;
+      margin-bottom: 30px;
+      color: #00bfff;
+      text-shadow: 0 4px 12px rgba(0,0,0,0.8);
+      animation: glow 2s infinite alternate;
+    }
+    @keyframes glow {
+      0% { text-shadow: 0 0 5px #00bfff, 0 0 10px #00bfff; }
+      100% { text-shadow: 0 0 20px #00ffff, 0 0 40px #00ffff; }
+    }
+    .btn {
+      padding: 14px 28px;
+      margin: 10px;
+      border-radius: 12px;
+      border: none;
+      background: linear-gradient(45deg, #00bfff, #0099ff);
+      color: white;
+      font-size: 20px;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.3s;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.6);
+    }
+    .btn:hover {
+      transform: scale(1.1);
+      box-shadow: 0 6px 12px rgba(0,0,0,0.8);
+    }
+
+    /* Floating coins decoration */
+    .coin {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      background: gold;
+      border-radius: 50%;
+      animation: floatCoins 4s infinite;
+    }
+    @keyframes floatCoins {
+      0% { transform: translateY(0px); opacity: 0.8; }
+      50% { transform: translateY(-20px); opacity: 1; }
+      100% { transform: translateY(0px); opacity: 0.8; }
+    }
+
+    /* Shop */
+    #shopMenu {
+      display:none;
+      position:fixed;
+      top:50%;
+      left:50%;
+      transform:translate(-50%,-50%);
+      background:#333; 
+      color:white; 
+      padding:20px; 
+      border-radius:10px; 
+      text-align:center; 
+      width:320px;
+      z-index:15;
+    }
+    .char-btn {
+      margin:5px 0;
+      padding:8px 12px;
+      width:100%;
+      border:none;
+      border-radius:8px;
+      cursor:pointer;
+      font-size:16px;
+    }
+
+    /* Pause Button */
+    #pauseBtn {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      padding: 10px 16px;
+      border-radius: 8px;
+      border: none;
+      background: #ffaa00;
+      color: white;
+      font-size: 16px;
+      display: none;
+      z-index: 5;
+      cursor: pointer;
+    }
+
+    /* Pause / Game Over Menu */
+    #pauseMenu {
+      position: absolute;
+      inset: 0;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background: rgba(0,0,0,0.8);
+      z-index: 20;
+      text-align: center;
+    }
+    #pauseMenu h2 {
+      font-size: 36px;
+      margin-bottom: 20px;
+      text-shadow: 0 2px 6px rgba(0,0,0,0.7);
+    }
+    #pauseMenu button {
+      margin: 10px;
+      padding: 12px 24px;
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+      font-size: 18px;
+      transition: transform 0.2s, background 0.2s;
+    }
+    #pauseMenu button:hover { transform: scale(1.05); }
+    #resumeBtn { background: #00cc66; color: white; }
+    #restartBtn { background: #ff4444; color: white; }
+    #menuBtn { background: #0099ff; color: white; }
+
+  </style>
+</head>
+<body>
+
+<!-- Main Menu -->
+<div id="menu">
+  <h1>Treasure Run</h1>
+  <button class="btn" onclick="startGame()">Play</button>
+  <button class="btn" onclick="openShop()">Shop</button>
+
+  <!-- Decorative coins -->
+  <div class="coin" style="top:50px; left:100px;"></div>
+  <div class="coin" style="top:120px; left:250px;"></div>
+  <div class="coin" style="top:200px; left:180px;"></div>
+</div>
+
+<!-- Shop Menu -->
+<div id="shopMenu">
+  <h2>Shop</h2>
+  <div id="coinsOwned">Coins: 0</div>
+  <div id="characters">
+      <!-- Example characters -->
+      <button class="char-btn" data-cost="10" data-color="0x00ff00" data-face="🙂">Green Cube - 10 Coins 🙂</button>
+      <button class="char-btn" data-cost="25" data-color="0xff00ff" data-face="😎">Magenta Cube - 25 Coins 😎</button>
+      <button class="char-btn" data-cost="50" data-color="0x00ffff" data-face="🤖">Cyan Cube - 50 Coins 🤖</button>
+      <button class="char-btn" data-cost="75" data-color="0xffff00" data-face="👾">Yellow Cube - 75 Coins 👾</button>
+      <button class="char-btn" data-cost="100" data-color="0xffa500" data-face="💀">Orange Cube - 100 Coins 💀</button>
+  </div>
+  <br>
+  <button class="btn" onclick="closeShop()">Close</button>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div id="score">Score: 0</div>
+  <div id="coins">Coins: 0</div>
+</div>
+
+<!-- Pause Button -->
+<button id="pauseBtn" onclick="pauseGame()">Pause</button>
+
+<!-- Pause / Game Over Menu -->
+<div id="pauseMenu">
+  <h2 id="pauseTitle">Paused</h2>
+  <button id="resumeBtn" onclick="resumeGame()">Resume</button>
+  <button id="restartBtn" onclick="restartGame()">Restart</button>
+  <button id="menuBtn" onclick="returnToMenu()">Main Menu</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="script.js"></script>
+
+</body>
+</html>
