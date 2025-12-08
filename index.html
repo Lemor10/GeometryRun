@@ -126,9 +126,9 @@
   .pause-title{font-family:Orbitron;font-size:26px;margin-bottom:12px;color:var(--neonA)}
 
   /* ========== Progress bar ========== */
-  #progressBarContainer{position:absolute;top:86px;left:50%;transform:translateX(-50%);height:14px;width:44%;min-width:240px;max-width:560px;border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,0.03);z-index:205;background:rgba(0,0,0,0.25)}
+  #progressBarContainer{position:absolute;top:115px;left:50%;transform:translateX(-50%);height:14px;width:44%;min-width:240px;max-width:560px;border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,0.03);z-index:205;background:rgba(0,0,0,0.25)}
   #progressBar{height:100%;width:0;background:linear-gradient(90deg,var(--neonA),var(--neonB));box-shadow:0 10px 30px rgba(106,0,255,0.06)}
-  #progressPercent{position:absolute;top:72px;left:50%;transform:translateX(-50%);font-family:Orbitron;font-size:13px;color:var(--muted);z-index:205}
+  #progressPercent{position:absolute;top:95px;left:50%;transform:translateX(-50%);font-family:Orbitron;font-size:13px;color:var(--muted);z-index:205}
 
   /* ========== Responsive tweaks ========== */
   @media (max-width:920px){
@@ -159,6 +159,7 @@
     <div class="hud-item hud-score" id="score">Score: 0</div>
     <div class="hud-item hud-coins" id="coins">Coins: 0</div>
     <div class="hud-item hud-high" id="highScore">High Score: 0</div>
+    <div id="hudParticles"></div>
   </div>
 
   <!-- top-right quick controls -->
@@ -176,9 +177,9 @@
     <div class="menu-panel" role="document">
       <div class="menu-left">
         <div class="brand">
-          <div class="logo" aria-hidden="true">TR</div>
+          <div class="logo" aria-hidden="true">GR</div>
           <div>
-            <div class="title">Treasure Run</div>
+            <div class="title">Geometry Run</div>
             <div class="subtitle">Neon Cyber Runner — dodge, collect & dash</div>
           </div>
         </div>
@@ -201,8 +202,8 @@
         </div>
 
         <div class="menu-actions">
-          <button class="btn" id="playBtn" onclick="startGame(1)">Play Level 1</button>
-          <button class="btn" id="shopBtnAlt">Open Shop</button>
+          <button class="btn" id="playBtn" onclick="startGame(1)">Select Level</button>
+          <button class="btn" id="shopBtnAlt">Shop</button>
           <button class="btn" id="settingsBtnAlt">Settings</button>
         </div>
 
