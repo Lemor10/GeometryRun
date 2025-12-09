@@ -700,6 +700,62 @@ document.addEventListener("keydown", (e) => {
     }
 });
 
+window.addEventListener("touchstart", (e) => {
+  touchStartX = e.touches[0].clientX;
+  touchStartY = e.touches[0].clientY;
+});
+
+window.addEventListener("touchend", (e) => {
+  const dx = e.changedTouches[0].clientX - touchStartX;
+  const dy = e.changedTouches[0].clientY - touchStartY;
+
+  const absX = Math.abs(dx);
+  const absY = Math.abs(dy);
+
+  if (!isGameRunning) return;
+
+  // Vertical swipe → JUMP
+  if (absY > absX && dy < -40) {
+    if (!player.isJumping) {
+      player.isJumping = true;
+      player.velocityY = jumpPower;
+    }
+  }
+
+  // Horizontal swipe → LANE CHANGE
+  else if (absX > absY) {
+    if (dx > 40) {
+      // Swipe right
+      moveLane(1);
+    } 
+    else if (dx < -40) {
+      // Swipe left
+      moveLane(-1);
+    }
+  }
+});
+
+function moveLeft() {
+    if (currentLane > 0) {
+        currentLane--;
+        targetX = lanes[currentLane];
+    }
+}
+
+function moveRight() {
+    if (currentLane < 2) {
+        currentLane++;
+        targetX = lanes[currentLane];
+    }
+}
+
+function jump() {
+    if (!isJumping) {
+        isJumping = true;
+        velocityY = jumpForce;
+    }
+}
+
 // PAUSE / RESUME
 function pauseGame() {
     paused = true;
@@ -745,37 +801,3 @@ window.addEventListener("resize", () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-window.addEventListener("touchstart", (e) => {
-  touchStartX = e.touches[0].clientX;
-  touchStartY = e.touches[0].clientY;
-});
-
-window.addEventListener("touchend", (e) => {
-  const dx = e.changedTouches[0].clientX - touchStartX;
-  const dy = e.changedTouches[0].clientY - touchStartY;
-
-  const absX = Math.abs(dx);
-  const absY = Math.abs(dy);
-
-  if (!isGameRunning) return;
-
-  // Vertical swipe → JUMP
-  if (absY > absX && dy < -40) {
-    if (!player.isJumping) {
-      player.isJumping = true;
-      player.velocityY = jumpPower;
-    }
-  }
-
-  // Horizontal swipe → LANE CHANGE
-  else if (absX > absY) {
-    if (dx > 40) {
-      // Swipe right
-      moveLane(1);
-    } 
-    else if (dx < -40) {
-      // Swipe left
-      moveLane(-1);
-    }
-  }
-});
