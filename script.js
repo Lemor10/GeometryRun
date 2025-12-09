@@ -14,6 +14,8 @@ let velocityY = 0;
 // --------- SWIPE GESTURE CONTROLS ----------
 let touchStartX = 0;
 let touchStartY = 0;
+let touchEndX = 0;
+let touchEndY = 0;
 
 let obstacles = [];
 let coinsArr = [];
@@ -682,6 +684,68 @@ function spawnUIParticles() {
     });
 }
 
+// ----------- TOUCH GESTURES ------------
+document.addEventListener("touchstart", (e) => {
+    if (inputLocked || paused) return;
+    const touch = e.changedTouches[0];
+    touchStartX = touch.pageX;
+    touchStartY = touch.pageY;
+});
+
+document.addEventListener("touchmove", (e) => {
+    const touch = e.changedTouches[0];
+    touchEndX = touch.pageX;
+    touchEndY = touch.pageY;
+});
+
+document.addEventListener("touchend", (e) => {
+    if (inputLocked || paused) return;
+
+    const dx = touchEndX - touchStartX;
+    const dy = touchEndY - touchStartY;
+
+    const absDX = Math.abs(dx);
+    const absDY = Math.abs(dy);
+
+    const swipeThreshold = 40; // Minimum swipe distance
+
+    // ---------- HORIZONTAL SWIPE ----------
+    if (absDX > absDY && absDX > swipeThreshold) {
+
+        if (dx > 0) {
+            // 👉 Swipe Right
+            if (currentLane < 2) currentLane++;
+            targetX = lanes[currentLane];
+        } else {
+            // 👈 Swipe Left
+            if (currentLane > 0) currentLane--;
+            targetX = lanes[currentLane];
+        }
+        return;
+    }
+
+    // ---------- VERTICAL SWIPE ----------
+    if (absDY > absDX && absDY > swipeThreshold) {
+
+        if (dy < 0) {
+            // 👆 Swipe Up (jump)
+            if (!isJumping && player.position.y <= 1.05) {
+                isJumping = true;
+                velocityY = jumpForce;
+            }
+        }
+        return;
+    }
+
+    // ---------- TAP TO JUMP ----------
+    if (absDX < 10 && absDY < 10) {
+        if (!isJumping && player.position.y <= 1.05) {
+            isJumping = true;
+            velocityY = jumpForce;
+        }
+    }
+});
+
 // PLAYER CONTROLS
 document.addEventListener("keydown", (e) => {
     if (inputLocked || levelState !== "running") return;
@@ -699,62 +763,6 @@ document.addEventListener("keydown", (e) => {
         velocityY = jumpForce;
     }
 });
-
-window.addEventListener("touchstart", (e) => {
-  touchStartX = e.touches[0].clientX;
-  touchStartY = e.touches[0].clientY;
-});
-
-window.addEventListener("touchend", (e) => {
-  const dx = e.changedTouches[0].clientX - touchStartX;
-  const dy = e.changedTouches[0].clientY - touchStartY;
-
-  const absX = Math.abs(dx);
-  const absY = Math.abs(dy);
-
-  if (!isGameRunning) return;
-
-  // Vertical swipe → JUMP
-  if (absY > absX && dy < -40) {
-    if (!player.isJumping) {
-      player.isJumping = true;
-      player.velocityY = jumpPower;
-    }
-  }
-
-  // Horizontal swipe → LANE CHANGE
-  else if (absX > absY) {
-    if (dx > 40) {
-      // Swipe right
-      moveLane(1);
-    } 
-    else if (dx < -40) {
-      // Swipe left
-      moveLane(-1);
-    }
-  }
-});
-
-function moveLeft() {
-    if (currentLane > 0) {
-        currentLane--;
-        targetX = lanes[currentLane];
-    }
-}
-
-function moveRight() {
-    if (currentLane < 2) {
-        currentLane++;
-        targetX = lanes[currentLane];
-    }
-}
-
-function jump() {
-    if (!isJumping) {
-        isJumping = true;
-        velocityY = jumpForce;
-    }
-}
 
 // PAUSE / RESUME
 function pauseGame() {
