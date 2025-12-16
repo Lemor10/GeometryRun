@@ -1,41 +1,35 @@
-//--------------------------------------------
-// FULL UPDATED SCRIPT.JS (Level Select + Death Animation Zoom)
-//--------------------------------------------
-
-// BASIC GAME STATES
 let scene, camera, renderer;
 let player, playerColor = 0x00e5ff, playerFace = "🙂";
 let lanes = [-2, 0, 2];
 let currentLane = 1;
-let targetX = lanes[currentLane]; // Smooth target X for lane
-let targetY = 1;                   // Smooth target Y for jump
+let targetX = lanes[currentLane];
+let targetY = 1;                   
 let isJumping = false;
 let velocityY = 0;
-// --------- SWIPE GESTURE CONTROLS ----------
+
 let touchStartX = 0;
 let touchStartY = 0;
 let touchEndX = 0;
 let touchEndY = 0;
 
 let obstacles = [];
-let obstacleWidth = 1;   // base width of obstacles
-let obstacleHeight = 1;  // base height of obstacles
-let lastScaleScore = 0;  // track the last score at which obstacles were scaled
-let nextUpgradeIsWidth = true; // toggle system
+let obstacleWidth = 1;   
+let obstacleHeight = 1;
+let lastScaleScore = 0; 
+let nextUpgradeIsWidth = true; 
 
 let coinsArr = [];
 let neonParticles = [];
 let floors = [];
 let uiParticles = [];
-let backgroundParticles = []; // NEW: background particle array
+let backgroundParticles = []; 
 
 let score = 0;
-let coins = 0; // run coins (resets every run)
+let coins = 0; 
 let totalCoins = parseInt(localStorage.getItem("totalCoins")) || 0;
 let ownedColors = JSON.parse(localStorage.getItem("ownedSkins")) || ["default"];
 let selectedColor = localStorage.getItem("selectedSkin") || "default";
 
-// High score per level
 let levelHighScores = JSON.parse(localStorage.getItem("levelHighScores")) || {};
 let unlockedLevels = JSON.parse(localStorage.getItem("unlockedLevels")) || [1];
 
@@ -51,8 +45,8 @@ let deathAnimation = false;
 let deathVelocityY = 0;
 let deathSpin = 0;
 
-let levelDistance = 1000; // how many score units to complete a level (scaled per level)
-let levelState = "idle"; // "running", "gameover", "levelcomplete"
+let levelDistance = 1000; 
+let levelState = "idle"; 
 
 let finishPortal = null;
 let finishSequence = false;
@@ -69,14 +63,12 @@ const sounds = {
     gameOver: new Audio("sounds/game_over.wav")
 };
 
-// Adjust volumes if needed
 sounds.jump.volume = 0.5;
 sounds.coin.volume = 0.5;
 sounds.hit.volume = 0.7;
 sounds.levelComplete.volume = 0.5;
 sounds.gameOver.volume = 0.5;
 
-// Optional: background music
 const bgMusic = new Audio("sounds/bg_music.mp3");
 bgMusic.loop = true;
 bgMusic.volume = 0.5;
@@ -84,7 +76,7 @@ bgMusic.volume = 0.5;
 const unlockSound = new Audio("sounds/unlock.wav");
 unlockSound.volume = 0.6;
 
-// UI ELEMENTS (assumes IDs already in HTML)
+// UI ELEMENTS
 const menu = document.getElementById("menu");
 const pauseBtn = document.getElementById("pauseBtn");
 const pauseMenu = document.getElementById("pauseMenu");
@@ -99,9 +91,8 @@ const progressBar = document.getElementById("progressBar");
 const progressPercent = document.getElementById("progressPercent");
 const progressContainer = document.getElementById("progressBarContainer");
 
-const shopCoinsUI = document.getElementById("shopCoins"); // example ID
+const shopCoinsUI = document.getElementById("shopCoins");
 
-// Input locks (prevent inputs during transitions)
 let inputLocked = false;
 
 // NEON UI COLORS
@@ -110,7 +101,6 @@ const neonYellow = "#ffff66";
 const neonRed = "#ff4466";
 const neonOrange = "#ffaa00";
 
-// Each color now has a top (main) and bottom (darker) color
 const colorMap = { 
     default: 0x00e5ff, 
     red: 0xff3333, 
@@ -123,7 +113,7 @@ const colorMap = {
 function init() {
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
-    camera.position.set(0, 4, 10); // Higher and farther back
+    camera.position.set(0, 4, 10);
     camera.lookAt(0, 1, 0);
 
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -138,7 +128,7 @@ function init() {
     applySkin(colorMap[selectedColor] || playerColor);
     updateShopUI();
 
-    createBackgroundParticles(100); // NEW: spawn background particles
+    createBackgroundParticles(100);
 
     document.querySelectorAll(".level-btn").forEach(btn => {
         btn.addEventListener("mouseenter", () => btn.style.transform = "scale(1.1)");
@@ -151,13 +141,11 @@ function init() {
 
     });
 
-    // ensure restart/menu/resume hooks are present
     document.getElementById("restartBtn").addEventListener("click", () => restartCurrentLevel());
     document.getElementById("menuBtn").addEventListener("click", () => returnToMenu());
     document.getElementById("pauseBtn").addEventListener("click", () => pauseGame());
     document.getElementById("resumeBtn").addEventListener("click", () => resumeGame());
 
-    // shop/settings buttons handled elsewhere in your code, keep their hooks
     document.getElementById("shopBtn")?.addEventListener("click", () => { document.getElementById("shopMenu").style.display = "block"; });
     document.getElementById("shopBtnAlt")?.addEventListener("click", () => { document.getElementById("shopMenu").style.display = "block"; });
     document.getElementById("closeShopBtn")?.addEventListener("click", () => { document.getElementById("shopMenu").style.display = "none"; });
@@ -384,19 +372,18 @@ const lvlKey = `level${level}`;
 highUI.textContent = "High Score: " + (levelHighScores[lvlKey] || 0);
 
 // CREATE obstacles for the level
-const obstacleCount = 6; // adjust how many obstacles you want
+const obstacleCount = 6; 
 for (let i = 0; i < obstacleCount; i++) {
-    const zPos = -70 - i * 30;  // spacing between obstacles
+    const zPos = -70 - i * 30; 
     createObstacle(zPos);
 }
 
 // CREATE coins for the level
-const coinCount = 8; // reduce spawn compared to original
+const coinCount = 8; 
 for (let i = 0; i < coinCount; i++) {
-    const zPos = -10 - i * 25;  // spacing between coins
+    const zPos = -10 - i * 25;  
     createCoin(zPos);
 }
-
 
     menu.style.display = "none";
     pauseBtn.style.display = "block";
@@ -431,7 +418,7 @@ function animate() {
             score += 0.2;
         }
         scoreUI.textContent = "Score: " + Math.floor(score);
-        // 🔥 LIVE BEST RUN UPDATE
+
         const lvlKey = `level${level}`;
         const currentBest = levelHighScores[lvlKey] || 0;
         const runScore = Math.floor(score);
@@ -449,15 +436,11 @@ function animate() {
         // Player movement smoothing
         player.position.x += (targetX - player.position.x) * 0.18;
 
-        // --------------------------
-        // ADD BALL ROLLING ROTATION
-        // --------------------------
-        const ballRadius = 0.5; // match your SphereGeometry radius
+    
+        const ballRadius = 0.5; 
 
-        // forward roll
         player.rotation.x -= gameSpeed / ballRadius;
 
-        // sideways roll (based on lane change)
         let deltaX = targetX - player.position.x;
         player.rotation.z += deltaX / ballRadius * 0.18;
 
@@ -481,7 +464,7 @@ function animate() {
         checkCollisions();
         updateParticles();
         updateProgress();
-        updateBackgroundParticles(); // <-- update background particles every frame
+        updateBackgroundParticles(); 
         updateFinishSequence();
         updateShopCoins();
 
@@ -491,7 +474,6 @@ function animate() {
     }
 
     playDeathAnimation();
-        // NEW: UI particles
     spawnUIParticles();
     updateUIParticles();
 
@@ -503,18 +485,16 @@ function startFinishSequence() {
     finishSequence = true;
     inputLocked = true;
 
-    gameSpeed = 0.6; // slow motion feel
+    gameSpeed = 0.6; 
     createFinishGate();
 }
 
 function updateFinishSequence() {
     if (!finishSequence || !finishPortal) return;
 
-    // Soft pulse (no rotation)
     const pulse = 1 + Math.sin(performance.now() * 0.004) * 0.05;
     finishPortal.scale.set(pulse, pulse, pulse);
 
-    // Pull player straight forward
     const target = new THREE.Vector3(
         0,
         1,
@@ -525,12 +505,10 @@ function updateFinishSequence() {
     player.position.y += (target.y - player.position.y) * 0.06;
     player.position.z += (target.z - player.position.z) * 0.12;
 
-    // Fade player slightly
     if (player.material) {
         player.material.opacity *= 0.985;
     }
 
-    // Enter gate
     if (player.position.z < finishPortal.position.z + 0.4) {
         finishSequence = false;
         scene.remove(finishPortal);
@@ -545,29 +523,22 @@ function updateFinishSequence() {
 
 // MOVE & RECYCLE OBJECTS
 function moveObjects() {
-    // Scale obstacle size every 200 score points
-// ---------------------------------------------
-// NEW DYNAMIC OBSTACLE GROWTH (every +300 score)
-// ---------------------------------------------
-// Scale obstacle size every 300 score points
-// Alternate obstacle scaling every 300 score
+
 if (score >= lastScaleScore + 300) {
 
     if (nextUpgradeIsWidth) {
-        obstacleWidth += 1;    // widen
+        obstacleWidth += 1;    
     } else {
-        obstacleHeight += 1;   // make taller
+        obstacleHeight += 1;   
     }
 
-    // Swap to the other upgrade for next time
     nextUpgradeIsWidth = !nextUpgradeIsWidth;
 
     lastScaleScore = Math.floor(score);
 
-    // Apply to current obstacles
     obstacles.forEach(o => {
         o.scale.set(obstacleWidth, obstacleHeight, 1);
-        o.position.y = obstacleHeight / 2; // adjust height properly
+        o.position.y = obstacleHeight / 2;
     });
 }
 
@@ -712,8 +683,8 @@ function checkCollisions() {
         const yDiff = Math.abs(c.position.y - player.position.y);
 
          if (zDiff < 0.9 && xDiff < 0.9 && yDiff < 1.2) {
-            coins++;          // run coins
-            totalCoins++;     // wallet coins
+            coins++;          
+            totalCoins++;     
 
             localStorage.setItem("totalCoins", totalCoins);
 
@@ -735,13 +706,13 @@ function checkCollisions() {
 // DEATH ANIMATION & GAME OVER
 // ------------------------------
 function startDeathAnimation() {
-    if (deathAnimation) return; // Already animating
+    if (deathAnimation) return; 
 
     deathAnimation = true;
     inputLocked = true;
-    gameRunning = false; // stop regular movement
+    gameRunning = false; 
 
-    deathVelocityY = 0.4; // initial upward bounce
+    deathVelocityY = 0.4; 
     deathSpin = 0;
 
     if (player.material) {
@@ -752,27 +723,22 @@ function startDeathAnimation() {
 
 function playDeathAnimation() {
     if (!deathAnimation) return;
-
-    // Animate player falling and spinning
-    deathVelocityY -= 0.025; // gravity
+ 
+    deathVelocityY -= 0.025; 
     player.position.y += deathVelocityY;
     deathSpin += 0.07;
     player.rotation.x += 0.15;
     player.rotation.z += 0.18;
 
-    // Fade out player
     if (player.material && typeof player.material.opacity === "number") {
         player.material.opacity = Math.max(0, player.material.opacity - 0.01);
     }
 
-    // End animation condition
     if ((player.material && player.material.opacity <= 0) || player.position.y < -6) {
         deathAnimation = false;
 
-        // Make sure player is invisible at the end
         if (player.material) player.material.opacity = 0;
 
-        // Show Game Over menu reliably
         showGameOverMenu();
     }
 }
@@ -780,7 +746,6 @@ function playDeathAnimation() {
 // ------------------------------
 // SHOW GAME OVER MENU
 // ------------------------------
-// Called when death animation ends
 function showGameOverMenu() {
     levelState = "gameover";
     paused = true;
@@ -799,13 +764,11 @@ function showGameOverMenu() {
     document.getElementById("pauseTitle").innerText = "Game Over";
     document.getElementById("resumeBtn").style.display = "none";
 
-    // ✅ READ ONLY — do NOT save here
     const lvlKey = `level${level}`;
     const best = levelHighScores[lvlKey] || 0;
     highUI.textContent = "High Score: " + best;
     menuHigh.textContent = best;
 
-    // Unlock logic (OK to stay here)
     const percent = Math.floor((score / levelDistance) * 100);
     const nextLevel = level + 1;
 
@@ -814,20 +777,17 @@ function showGameOverMenu() {
         localStorage.setItem("unlockedLevels", JSON.stringify(unlockedLevels));
     }
 
-    // ✅ ONE place handles saving + UI refresh
     finalizeRunAndUpdateMenu();
     updateLevelLocks();
 
     zoomInMenu(menuEl);
 
-    // Reset player
     player.position.set(lanes[1], 1, 0);
     player.rotation.set(0, 0, 0);
     if (player.material) player.material.opacity = 1;
 }
 
 
-// Smooth zoom-in
 function zoomInMenu(menuEl) {
     let scale = 0.1;
     let opacity = 0;
@@ -869,7 +829,6 @@ function onLevelComplete() {
     player.position.set(lanes[1], 1, 0);
     player.rotation.set(0,0,0);
     
-// Save best run per level
         const lvlKey = `level${level}`;
         const currentBest = levelHighScores[lvlKey] || 0;
 
@@ -931,7 +890,6 @@ function createUIParticle(x, y, color = neonBlue) {
     uiParticles.push(particle);
 }
 
-// Animate UI particles
 function updateUIParticles() {
     for (let i = uiParticles.length - 1; i >= 0; i--) {
         const p = uiParticles[i];
@@ -946,20 +904,17 @@ function updateUIParticles() {
     }
 }
 
-// Spawn subtle particles behind HUD and buttons
 function spawnUIParticles() {
-    // random around HUD
     const hudEls = [scoreUI, coinsUI, highUI, progressBar, progressPercent];
     hudEls.forEach(el => {
         const rect = el.getBoundingClientRect();
-        if (Math.random() < 0.4) { // spawn chance
+        if (Math.random() < 0.4) { 
             const x = rect.left + Math.random() * rect.width;
             const y = rect.top + Math.random() * rect.height;
             createUIParticle(x, y, neonBlue);
         }
     });
 
-    // random behind menu buttons
     document.querySelectorAll("#menu button, #pauseMenu button").forEach(btn => {
         const rect = btn.getBoundingClientRect();
         if (Math.random() < 0.3) {
@@ -973,7 +928,6 @@ function spawnUIParticles() {
 function createFinishGate() {
     const group = new THREE.Group();
 
-    // Outer ring
     const outerGeo = new THREE.TorusGeometry(3.2, 0.25, 16, 48);
     const outerMat = new THREE.MeshStandardMaterial({
         color: 0x00e5ff,
@@ -986,7 +940,6 @@ function createFinishGate() {
     const outer = new THREE.Mesh(outerGeo, outerMat);
     outer.rotation.x = Math.PI / 2;
 
-    // Inner glow ring
     const innerGeo = new THREE.TorusGeometry(2.4, 0.15, 16, 48);
     const innerMat = new THREE.MeshStandardMaterial({
         color: 0xffff66,
@@ -1066,17 +1019,17 @@ document.addEventListener("touchend", (e) => {
     const absDX = Math.abs(dx);
     const absDY = Math.abs(dy);
 
-    const swipeThreshold = 40; // Minimum swipe distance
+    const swipeThreshold = 40; 
 
     // ---------- HORIZONTAL SWIPE ----------
     if (absDX > absDY && absDX > swipeThreshold) {
 
         if (dx > 0) {
-            // 👉 Swipe Right
+            //  Swipe Right
             if (currentLane < 2) currentLane++;
             targetX = lanes[currentLane];
         } else {
-            // 👈 Swipe Left
+            //  Swipe Left
             if (currentLane > 0) currentLane--;
             targetX = lanes[currentLane];
         }
@@ -1163,7 +1116,7 @@ function updateLevelBestRuns() {
 
     document.querySelectorAll(".level-btn").forEach(btn => {
         const lvl = parseInt(btn.dataset.level);
-        if (!lvl) return; // skip if no level
+        if (!lvl) return; 
 
         const bestScore = data[`level${lvl}`] || 0;
         const maxDist = 1000 + (lvl - 1) * 600;
@@ -1183,7 +1136,6 @@ function updateLevelBestRuns() {
         }
     });
 
-    // Update HUD high score
     const lvlKey = `level${level}`;
     const bestForCurrent = data[lvlKey] || 0;
     highUI.textContent = "High Score: " + bestForCurrent;
@@ -1209,7 +1161,6 @@ function updateLevelLocks() {
 }
 
 function finalizeRunAndUpdateMenu() {
-    // Add session coins to wallet
     totalCoins += coins;
     localStorage.setItem("totalCoins", totalCoins);
     updateShopCoins();
@@ -1222,8 +1173,6 @@ function finalizeRunAndUpdateMenu() {
         levelHighScores[lvlKey] = runScore;
         localStorage.setItem("levelHighScores", JSON.stringify(levelHighScores));
     }
-
-    // Update UI
     updateLevelBestRuns();
     updateLevelLocks();
 }
@@ -1265,18 +1214,15 @@ document.querySelectorAll(".shop-card").forEach(card=>{
   });
 });
 
-// BONUS: Add hover glow for menu buttons
 document.querySelectorAll("#menu button, #pauseMenu button").forEach(btn => {
     btn.style.transition = "0.2s";
     btn.addEventListener("mouseenter", () => btn.style.boxShadow = `0 0 16px ${neonBlue}, 0 0 32px ${neonBlue}`);
     btn.addEventListener("mouseleave", () => btn.style.boxShadow = "");
 });
-// SETTINGS (keeps your existing behavior)
 document.getElementById("settingsBtn")?.addEventListener("click", () => { document.getElementById("settingsMenu").style.display = "block"; });
 document.getElementById("settingsBtnAlt")?.addEventListener("click", () => { document.getElementById("settingsMenu").style.display = "block"; });
 document.getElementById("closeSettingsBtn")?.addEventListener("click", () => { document.getElementById("settingsMenu").style.display = "none"; });
 
-// Responsive resize
 window.addEventListener("resize", () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
