@@ -18,6 +18,11 @@ let touchEndX = 0;
 let touchEndY = 0;
 
 let obstacles = [];
+let obstacleWidth = 1;   // base width of obstacles
+let obstacleHeight = 1;  // base height of obstacles
+let lastScaleScore = 0;  // track the last score at which obstacles were scaled
+let nextUpgradeIsWidth = true; // toggle system
+
 let coinsArr = [];
 let neonParticles = [];
 let floors = [];
@@ -25,15 +30,21 @@ let uiParticles = [];
 let backgroundParticles = []; // NEW: background particle array
 
 let score = 0;
-let coins = 0;
-let highScore = 0;
+let coins = 0; // run coins (resets every run)
+let totalCoins = parseInt(localStorage.getItem("totalCoins")) || 0;
+let ownedColors = JSON.parse(localStorage.getItem("ownedSkins")) || ["default"];
+let selectedColor = localStorage.getItem("selectedSkin") || "default";
+
+// High score per level
+let levelHighScores = JSON.parse(localStorage.getItem("levelHighScores")) || {};
+let unlockedLevels = JSON.parse(localStorage.getItem("unlockedLevels")) || [1];
 
 let gameRunning = false;
 let paused = false;
 let level = 1;
 
 let gameSpeed = 1.0;
-let jumpForce = 0.7;
+let jumpForce = 0.6;
 let gravity = 0.06;
 
 let deathAnimation = false;
@@ -43,6 +54,36 @@ let deathSpin = 0;
 let levelDistance = 1000; // how many score units to complete a level (scaled per level)
 let levelState = "idle"; // "running", "gameover", "levelcomplete"
 
+let finishPortal = null;
+let finishSequence = false;
+let portalPullStrength = 0;
+
+// ----------------------
+// GAME SOUNDS
+// ----------------------
+const sounds = {
+    jump: new Audio("sounds/jump.wav"),
+    coin: new Audio("sounds/coin.wav"),
+    hit: new Audio("sounds/hit.wav"),
+    levelComplete: new Audio("sounds/level_complete.wav"),
+    gameOver: new Audio("sounds/game_over.wav")
+};
+
+// Adjust volumes if needed
+sounds.jump.volume = 0.5;
+sounds.coin.volume = 0.5;
+sounds.hit.volume = 0.7;
+sounds.levelComplete.volume = 0.5;
+sounds.gameOver.volume = 0.5;
+
+// Optional: background music
+const bgMusic = new Audio("sounds/bg_music.mp3");
+bgMusic.loop = true;
+bgMusic.volume = 0.5;
+
+const unlockSound = new Audio("sounds/unlock.wav");
+unlockSound.volume = 0.6;
+
 // UI ELEMENTS (assumes IDs already in HTML)
 const menu = document.getElementById("menu");
 const pauseBtn = document.getElementById("pauseBtn");
@@ -50,12 +91,15 @@ const pauseMenu = document.getElementById("pauseMenu");
 
 const scoreUI = document.getElementById("score");
 const coinsUI = document.getElementById("coins");
+const coinsOwnedUI = document.getElementById("coinsOwned");
 const highUI = document.getElementById("highScore");
 const menuHigh = document.getElementById("menuHigh");
 
 const progressBar = document.getElementById("progressBar");
 const progressPercent = document.getElementById("progressPercent");
 const progressContainer = document.getElementById("progressBarContainer");
+
+const shopCoinsUI = document.getElementById("shopCoins"); // example ID
 
 // Input locks (prevent inputs during transitions)
 let inputLocked = false;
@@ -65,6 +109,15 @@ const neonBlue = "#00e5ff";
 const neonYellow = "#ffff66";
 const neonRed = "#ff4466";
 const neonOrange = "#ffaa00";
+
+// Each color now has a top (main) and bottom (darker) color
+const colorMap = { 
+    default: 0x00e5ff, 
+    red: 0xff3333, 
+    purple: 0x9b5cff, 
+    orange: 0xff9f1c, 
+    green: 0x00ff88 
+};
 
 // SETUP THREE.JS
 function init() {
@@ -82,15 +135,20 @@ function init() {
 
     createFloor();
     createPlayer();
+    applySkin(colorMap[selectedColor] || playerColor);
+    updateShopUI();
+
     createBackgroundParticles(100); // NEW: spawn background particles
 
     document.querySelectorAll(".level-btn").forEach(btn => {
         btn.addEventListener("mouseenter", () => btn.style.transform = "scale(1.1)");
         btn.addEventListener("mouseleave", () => btn.style.transform = "scale(1)");
         btn.addEventListener("click", () => {
-            const lvl = parseInt(btn.dataset.level || btn.getAttribute("data-level") || btn.innerText.replace(/[^\d]/g,''));
-            startGame(lvl || 1);
+            const lvl = parseInt(btn.dataset.level);
+            if (!unlockedLevels.includes(lvl)) return;
+            startGame(lvl);
         });
+
     });
 
     // ensure restart/menu/resume hooks are present
@@ -142,17 +200,30 @@ function createFloor() {
     }
 }
 function createPlayer() {
-    const geo = new THREE.BoxGeometry(1, 1, 1);
+    const geo = new THREE.SphereGeometry(0.5, 32, 32); // radius 0.5
     const mat = new THREE.MeshStandardMaterial({
-        color: playerColor,
-        emissive: playerColor,
-        emissiveIntensity: 0.5,
+        color: colorMap[selectedColor] || playerColor,
+        emissiveIntensity: 0.8,
+        roughness: 0.6,
+        metalness: 0,
         transparent: true,
         opacity: 1
     });
     player = new THREE.Mesh(geo, mat);
     player.position.set(lanes[currentLane], 1, 0);
     scene.add(player);
+}
+
+function applySkin(colorHex){
+  if(!player) return;
+  player.material.color.setHex(colorHex);
+}
+
+function restoreSelectedSkin(){
+  const card = document.querySelector(`.shop-card[data-id="${selectedSkin}"]`);
+  if(card){
+    applySkin(Number(card.dataset.color));
+  }
 }
 
 // BACKGROUND PARTICLES
@@ -181,11 +252,11 @@ function updateBackgroundParticles() {
 }
 
 function createObstacle(zPos, overrideLane = null) {
-    const geo = new THREE.BoxGeometry(1, 1, 1);
+    const geo = new THREE.BoxGeometry(obstacleWidth, obstacleHeight, 1); // use dynamic size
     const mat = new THREE.MeshStandardMaterial({ color: 0xff4444, emissive: 0xff4444, emissiveIntensity: 0.3 });
     const obs = new THREE.Mesh(geo, mat);
     const lane = overrideLane !== null ? overrideLane : lanes[Math.floor(Math.random() * 3)];
-    obs.position.set(lane, 0.5, zPos);
+    obs.position.set(lane, obstacleHeight / 2, zPos); // adjust Y for new height
     obs.userData = { baseLane: lane, moveDir: Math.random() > 0.5 ? 1 : -1, rotationSpeed: Math.random()*0.06 };
     scene.add(obs);
     obstacles.push(obs);
@@ -270,6 +341,9 @@ function startGame(selectedLevel = 1) {
     level = selectedLevel;
     applyLevelSettings(level);
 
+    bgMusic.currentTime = 0;
+    bgMusic.play();
+
     currentLane = 1;
     targetX = lanes[currentLane];
     targetY = 1;
@@ -292,12 +366,37 @@ function startGame(selectedLevel = 1) {
     scoreUI.textContent = "Score: 0";
     coinsUI.textContent = "Coins: 0";
 
-    obstacles.forEach(o => scene.remove(o));
-    coinsArr.forEach(c => scene.remove(c));
-    neonParticles.forEach(p => scene.remove(p));
-    obstacles = [];
-    coinsArr = [];
-    neonParticles = [];
+// REMOVE old objects
+obstacles.forEach(o => scene.remove(o));
+coinsArr.forEach(c => scene.remove(c));
+neonParticles.forEach(p => scene.remove(p));
+obstacles = [];
+coinsArr = [];
+neonParticles = [];
+
+// RESET obstacle scaling
+obstacleWidth = 1;
+obstacleHeight = 1;
+lastScaleScore = 0;
+nextUpgradeIsWidth = true;
+
+const lvlKey = `level${level}`;
+highUI.textContent = "High Score: " + (levelHighScores[lvlKey] || 0);
+
+// CREATE obstacles for the level
+const obstacleCount = 6; // adjust how many obstacles you want
+for (let i = 0; i < obstacleCount; i++) {
+    const zPos = -70 - i * 30;  // spacing between obstacles
+    createObstacle(zPos);
+}
+
+// CREATE coins for the level
+const coinCount = 8; // reduce spawn compared to original
+for (let i = 0; i < coinCount; i++) {
+    const zPos = -10 - i * 25;  // spacing between coins
+    createCoin(zPos);
+}
+
 
     menu.style.display = "none";
     pauseBtn.style.display = "block";
@@ -312,13 +411,6 @@ function startGame(selectedLevel = 1) {
     levelState = "running";
     inputLocked = false;
 
-    for (let z = -70; z > -300; z -= 30) {
-        createObstacle(z);
-    }
-    for (let z = -10; z > -240; z -= 15) {
-        createCoin(z);
-    }
-
     document.getElementById("resumeBtn").style.display = "none";
 
     gameRunning = true;
@@ -326,7 +418,7 @@ function startGame(selectedLevel = 1) {
 }
 
 function applyLevelSettings(lvl) {
-    gameSpeed = 0.3 + lvl * 0.35;
+    gameSpeed = 0.7 + lvl * 0.35;
     levelDistance = 1000 + (lvl - 1) * 600;
 }
 
@@ -339,8 +431,35 @@ function animate() {
             score += 0.2;
         }
         scoreUI.textContent = "Score: " + Math.floor(score);
+        // 🔥 LIVE BEST RUN UPDATE
+        const lvlKey = `level${level}`;
+        const currentBest = levelHighScores[lvlKey] || 0;
+        const runScore = Math.floor(score);
 
+        if (runScore > currentBest) {
+            levelHighScores[lvlKey] = runScore;
+
+            // Update HUD instantly
+            highUI.textContent = "High Score: " + runScore;
+
+            // Persist immediately
+            localStorage.setItem("levelHighScores", JSON.stringify(levelHighScores));
+        }
+
+        // Player movement smoothing
         player.position.x += (targetX - player.position.x) * 0.18;
+
+        // --------------------------
+        // ADD BALL ROLLING ROTATION
+        // --------------------------
+        const ballRadius = 0.5; // match your SphereGeometry radius
+
+        // forward roll
+        player.rotation.x -= gameSpeed / ballRadius;
+
+        // sideways roll (based on lane change)
+        let deltaX = targetX - player.position.x;
+        player.rotation.z += deltaX / ballRadius * 0.18;
 
         if (isJumping) {
             targetY += velocityY;
@@ -363,14 +482,15 @@ function animate() {
         updateParticles();
         updateProgress();
         updateBackgroundParticles(); // <-- update background particles every frame
+        updateFinishSequence();
+        updateShopCoins();
 
         if (score >= levelDistance && levelState === "running") {
-            onLevelComplete();
+            startFinishSequence();
         }
     }
 
     playDeathAnimation();
-
         // NEW: UI particles
     spawnUIParticles();
     updateUIParticles();
@@ -378,8 +498,79 @@ function animate() {
     renderer.render(scene, camera);
 }
 
+function startFinishSequence() {
+    levelState = "finishing";
+    finishSequence = true;
+    inputLocked = true;
+
+    gameSpeed = 0.6; // slow motion feel
+    createFinishGate();
+}
+
+function updateFinishSequence() {
+    if (!finishSequence || !finishPortal) return;
+
+    // Soft pulse (no rotation)
+    const pulse = 1 + Math.sin(performance.now() * 0.004) * 0.05;
+    finishPortal.scale.set(pulse, pulse, pulse);
+
+    // Pull player straight forward
+    const target = new THREE.Vector3(
+        0,
+        1,
+        finishPortal.position.z + 0.2
+    );
+
+    player.position.x += (target.x - player.position.x) * 0.06;
+    player.position.y += (target.y - player.position.y) * 0.06;
+    player.position.z += (target.z - player.position.z) * 0.12;
+
+    // Fade player slightly
+    if (player.material) {
+        player.material.opacity *= 0.985;
+    }
+
+    // Enter gate
+    if (player.position.z < finishPortal.position.z + 0.4) {
+        finishSequence = false;
+        scene.remove(finishPortal);
+        finishPortal = null;
+
+        if (player.material) player.material.opacity = 0;
+
+        onLevelComplete();
+    }
+}
+
+
 // MOVE & RECYCLE OBJECTS
 function moveObjects() {
+    // Scale obstacle size every 200 score points
+// ---------------------------------------------
+// NEW DYNAMIC OBSTACLE GROWTH (every +300 score)
+// ---------------------------------------------
+// Scale obstacle size every 300 score points
+// Alternate obstacle scaling every 300 score
+if (score >= lastScaleScore + 300) {
+
+    if (nextUpgradeIsWidth) {
+        obstacleWidth += 1;    // widen
+    } else {
+        obstacleHeight += 1;   // make taller
+    }
+
+    // Swap to the other upgrade for next time
+    nextUpgradeIsWidth = !nextUpgradeIsWidth;
+
+    lastScaleScore = Math.floor(score);
+
+    // Apply to current obstacles
+    obstacles.forEach(o => {
+        o.scale.set(obstacleWidth, obstacleHeight, 1);
+        o.position.y = obstacleHeight / 2; // adjust height properly
+    });
+}
+
     for (let i = 0; i < obstacles.length; i++) {
         const o = obstacles[i];
         o.position.z += gameSpeed;
@@ -391,14 +582,15 @@ function moveObjects() {
         } else if (level === 3) {
             if (!o.userData.hasFallingInit) {
                 o.userData.hasFallingInit = true;
-                o.position.y = 6 + Math.random() * 4;
+                o.position.y = 7.0 + Math.random() * 1.0;
                 o.userData.dropVel = 0;
             }
-            o.userData.dropVel += 0.02 + Math.random() * 0.02;
+            o.userData.dropVel += 0.00 + Math.random() * 0.001;
             o.position.y -= o.userData.dropVel;
-            if (o.position.y < 0.5) o.position.y = 0.5;
+            if (o.position.y < 0.5) o.position.y = obstacleHeight / 2;
+;
         } else {
-            o.position.y = 0.5;
+            o.position.y = obstacleHeight / 2;
             o.userData.hasFallingInit = false;
         }
 
@@ -423,7 +615,7 @@ function moveObjects() {
             o.userData.baseLane = o.position.x;
             o.userData.movePhase = Math.random() * Math.PI * 2;
             o.rotation.set(0, 0, 0);
-            o.position.y = 0.5;
+            o.position.y = obstacleHeight / 2;
             o.userData.hasFallingInit = false;
             o.userData.isTrap = Math.random() < 0.08 ? true : false;
             if (o.userData.isTrap) o.material.emissive.setHex(0xFFAA00); else o.material.emissive.setHex(0xff4444);
@@ -435,19 +627,44 @@ function moveObjects() {
         c.position.z += gameSpeed;
         c.position.y = 0.6 + Math.sin((c.position.z + i) * 0.1) * 0.08;
         if (c.position.z > 12) {
-            c.position.z = -120 - Math.random() * 200;
+            c.position.z = -120 - Math.random() * 350;
             c.position.x = lanes[Math.floor(Math.random() * 3)];
             c.position.y = 0.6;
         }
     }
 
     for (let i = 0; i < floors.length; i++) {
-        const f = floors[i];
-        f.position.z += gameSpeed;
-        if (f.position.z > 60) {
-            f.position.z -= floors.length * 100;
-        }
+    const f = floors[i];
+    f.position.z += gameSpeed;
+
+    if (levelState === "finishing") continue;
+
+    if (f.position.z > 60) {
+        f.position.z -= floors.length * 100;
     }
+}
+
+}
+
+function updateShopCoins() {
+    if (coinsUI) coinsUI.textContent = "Coins: " + coins;
+    if (coinsOwnedUI) coinsOwnedUI.textContent = "Coins: " + totalCoins;
+}
+
+function updateShopUI(){
+  if (coinsOwnedUI) coinsOwnedUI.textContent = "Coins: " + totalCoins;
+
+  document.querySelectorAll(".shop-card").forEach(card=>{
+    const id = card.dataset.id;
+    const action = card.querySelector(".skin-action");
+
+    card.classList.toggle("owned", ownedColors.includes(id));
+    card.classList.toggle("selected", id === selectedColor);
+
+    if (id === selectedColor) action.textContent = "SELECTED";
+    else if (ownedColors.includes(id)) action.textContent = "OWNED";
+    else action.textContent = "BUY";
+  });
 }
 
 // COLLISIONS
@@ -480,6 +697,8 @@ function checkCollisions() {
                 obs.material.emissive.setHex(0xff4444);
             } else {
                 spawnHitEffect(player.position);
+                sounds.hit.currentTime = 0;
+                sounds.hit.play();
                 startDeathAnimation();
                 return;
             }
@@ -492,58 +711,77 @@ function checkCollisions() {
         const xDiff = Math.abs(c.position.x - player.position.x);
         const yDiff = Math.abs(c.position.y - player.position.y);
 
-        if (zDiff < 0.9 && xDiff < 0.9 && yDiff < 1.2) {
-            coins++;
-            coinsUI.textContent = "Coins: " + coins;
+         if (zDiff < 0.9 && xDiff < 0.9 && yDiff < 1.2) {
+            coins++;          // run coins
+            totalCoins++;     // wallet coins
+
+            localStorage.setItem("totalCoins", totalCoins);
+
+            sounds.coin.currentTime = 0;
+            sounds.coin.play();
+
             spawnCoinParticles(c.position);
+            updateShopCoins();
 
             c.position.z = -120 - Math.random() * 200;
             c.position.x = lanes[Math.floor(Math.random() * 3)];
         }
     }
+
 }
 
 // DEATH ANIMATION
+// ------------------------------
+// DEATH ANIMATION & GAME OVER
+// ------------------------------
 function startDeathAnimation() {
-    if (deathAnimation) return;
+    if (deathAnimation) return; // Already animating
+
     deathAnimation = true;
     inputLocked = true;
+    gameRunning = false; // stop regular movement
+
+    deathVelocityY = 0.4; // initial upward bounce
+    deathSpin = 0;
 
     if (player.material) {
         player.material.transparent = true;
         player.material.opacity = 1;
     }
-
-    deathVelocityY = 0.4; // slower upward impulse
-    deathSpin = 0;
-
-    gameRunning = false;
-    paused = false; 
 }
 
 function playDeathAnimation() {
     if (!deathAnimation) return;
 
-    deathVelocityY -= 0.025; // slower gravity
+    // Animate player falling and spinning
+    deathVelocityY -= 0.025; // gravity
     player.position.y += deathVelocityY;
-
     deathSpin += 0.07;
     player.rotation.x += 0.15;
     player.rotation.z += 0.18;
 
+    // Fade out player
     if (player.material && typeof player.material.opacity === "number") {
         player.material.opacity = Math.max(0, player.material.opacity - 0.01);
     }
 
-    if (player.material && player.material.opacity <= 0 || player.position.y < -6) {
+    // End animation condition
+    if ((player.material && player.material.opacity <= 0) || player.position.y < -6) {
         deathAnimation = false;
+
+        // Make sure player is invisible at the end
         if (player.material) player.material.opacity = 0;
-        finalizeGameOver();
+
+        // Show Game Over menu reliably
+        showGameOverMenu();
     }
 }
 
-// GAME OVER UI
-function finalizeGameOver() {
+// ------------------------------
+// SHOW GAME OVER MENU
+// ------------------------------
+// Called when death animation ends
+function showGameOverMenu() {
     levelState = "gameover";
     paused = true;
     inputLocked = true;
@@ -552,24 +790,42 @@ function finalizeGameOver() {
 
     const menuEl = pauseMenu;
     menuEl.style.display = "flex";
-    menuEl.style.transform = "scale(0.1)";
-    menuEl.style.opacity = "0";
+    menuEl.style.transform = "scale(1)";
+    menuEl.style.opacity = "1";
+
+    sounds.gameOver.currentTime = 0;
+    sounds.gameOver.play();
 
     document.getElementById("pauseTitle").innerText = "Game Over";
     document.getElementById("resumeBtn").style.display = "none";
 
-    if (score > highScore) {
-        highScore = Math.floor(score);
-        highUI.textContent = "High Score: " + highScore;
-        menuHigh.textContent = highScore;
+    // ✅ READ ONLY — do NOT save here
+    const lvlKey = `level${level}`;
+    const best = levelHighScores[lvlKey] || 0;
+    highUI.textContent = "High Score: " + best;
+    menuHigh.textContent = best;
+
+    // Unlock logic (OK to stay here)
+    const percent = Math.floor((score / levelDistance) * 100);
+    const nextLevel = level + 1;
+
+    if (percent >= 60 && nextLevel <= 5 && !unlockedLevels.includes(nextLevel)) {
+        unlockedLevels.push(nextLevel);
+        localStorage.setItem("unlockedLevels", JSON.stringify(unlockedLevels));
     }
+
+    // ✅ ONE place handles saving + UI refresh
+    finalizeRunAndUpdateMenu();
+    updateLevelLocks();
 
     zoomInMenu(menuEl);
 
+    // Reset player
     player.position.set(lanes[1], 1, 0);
     player.rotation.set(0, 0, 0);
     if (player.material) player.material.opacity = 1;
 }
+
 
 // Smooth zoom-in
 function zoomInMenu(menuEl) {
@@ -602,6 +858,9 @@ function onLevelComplete() {
     paused = true;
     inputLocked = true;
 
+    sounds.levelComplete.currentTime = 0;
+    sounds.levelComplete.play();
+
     pauseBtn.style.display = "none";
     pauseMenu.style.display = "flex";
     document.getElementById("pauseTitle").innerText = "Level Complete!";
@@ -609,14 +868,41 @@ function onLevelComplete() {
 
     player.position.set(lanes[1], 1, 0);
     player.rotation.set(0,0,0);
+    
+// Save best run per level
+        const lvlKey = `level${level}`;
+        const currentBest = levelHighScores[lvlKey] || 0;
 
-    if (score > highScore) {
-        highScore = Math.floor(score);
-        highUI.textContent = "High Score: " + highScore;
-        menuHigh.textContent = highScore;
-    }
+        if (Math.floor(score) > currentBest) {
+            levelHighScores[lvlKey] = Math.floor(score);
+            localStorage.setItem("levelHighScores", JSON.stringify(levelHighScores));
+        }
 
-    zoomInMenu(pauseMenu);
+        const percent = Math.floor((score / levelDistance) * 100);
+        const nextLevel = level + 1;
+
+        if (percent >= 80 && nextLevel <= 5 && !unlockedLevels.includes(nextLevel)) {
+            unlockedLevels.push(nextLevel);
+            localStorage.setItem("unlockedLevels", JSON.stringify(unlockedLevels));
+
+            setTimeout(() => {
+
+                const btn = document.querySelector(`.level-btn[data-level="${nextLevel}"]`);
+                if (btn) {
+                    spawnUnlockBurst(btn);
+                }
+
+                unlockSound.currentTime = 0;
+                unlockSound.play();
+            }, 400);
+        }
+        totalCoins += coins;
+        localStorage.setItem("totalCoins", totalCoins);
+        updateShopCoins();
+
+        zoomInMenu(pauseMenu);
+        updateLevelLocks();
+        finalizeRunAndUpdateMenu();
 }
 
 // PROGRESS BAR
@@ -684,6 +970,79 @@ function spawnUIParticles() {
     });
 }
 
+function createFinishGate() {
+    const group = new THREE.Group();
+
+    // Outer ring
+    const outerGeo = new THREE.TorusGeometry(3.2, 0.25, 16, 48);
+    const outerMat = new THREE.MeshStandardMaterial({
+        color: 0x00e5ff,
+        emissive: 0x00e5ff,
+        emissiveIntensity: 1.2,
+        transparent: true,
+        opacity: 0.95
+    });
+
+    const outer = new THREE.Mesh(outerGeo, outerMat);
+    outer.rotation.x = Math.PI / 2;
+
+    // Inner glow ring
+    const innerGeo = new THREE.TorusGeometry(2.4, 0.15, 16, 48);
+    const innerMat = new THREE.MeshStandardMaterial({
+        color: 0xffff66,
+        emissive: 0xffff66,
+        emissiveIntensity: 1.5,
+        transparent: true,
+        opacity: 0.9
+    });
+
+    const inner = new THREE.Mesh(innerGeo, innerMat);
+    inner.rotation.x = Math.PI / 2;
+
+    group.add(outer);
+    group.add(inner);
+
+    group.position.set(0, 1.6, -45);
+    scene.add(group);
+
+    finishPortal = group;
+}
+
+
+function spawnUnlockBurst(element) {
+    const rect = element.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+
+    for (let i = 0; i < 18; i++) {
+        const p = document.createElement("div");
+        p.className = "unlock-particle";
+        p.style.left = centerX + "px";
+        p.style.top = centerY + "px";
+
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 3 + 2;
+
+        p.vx = Math.cos(angle) * speed;
+        p.vy = Math.sin(angle) * speed;
+        p.life = 40;
+
+        document.body.appendChild(p);
+
+        const interval = setInterval(() => {
+            p.style.left = parseFloat(p.style.left) + p.vx + "px";
+            p.style.top = parseFloat(p.style.top) + p.vy + "px";
+            p.style.opacity -= 0.025;
+            p.life--;
+
+            if (p.life <= 0) {
+                clearInterval(interval);
+                p.remove();
+            }
+        }, 16);
+    }
+}
+
 // ----------- TOUCH GESTURES ------------
 document.addEventListener("touchstart", (e) => {
     if (inputLocked || paused) return;
@@ -732,6 +1091,8 @@ document.addEventListener("touchend", (e) => {
             if (!isJumping && player.position.y <= 1.05) {
                 isJumping = true;
                 velocityY = jumpForce;
+                sounds.jump.currentTime = 0; // reset to allow quick consecutive jumps
+                sounds.jump.play();
             }
         }
         return;
@@ -783,11 +1144,126 @@ function restartCurrentLevel() {
 }
 
 function returnToMenu() {
+
+    setTimeout(() => {
+    updateLevelBestRuns();
+}, 50);
+
     menu.style.display = "flex";
     pauseMenu.style.display = "none";
     paused = true;
     gameRunning = false;
+
+    updateLevelBestRuns();
+    updateLevelLocks();
 }
+
+function updateLevelBestRuns() {
+    const data = JSON.parse(localStorage.getItem("levelHighScores")) || {};
+
+    document.querySelectorAll(".level-btn").forEach(btn => {
+        const lvl = parseInt(btn.dataset.level);
+        if (!lvl) return; // skip if no level
+
+        const bestScore = data[`level${lvl}`] || 0;
+        const maxDist = 1000 + (lvl - 1) * 600;
+        const percent = Math.min(100, Math.floor((bestScore / maxDist) * 100));
+
+        const bestEl = btn.querySelector(`#best-level-${lvl}`) || btn.querySelector(".best-level");
+        if (bestEl) {
+            bestEl.innerHTML = `
+                Best Run: ${bestScore}<br>
+                <span style="font-size:12px;opacity:.7">Best: ${percent}%</span>
+            `;
+        }
+
+        const bar = btn.querySelector(`#level-progress-${lvl}`) || btn.querySelector(".level-progress");
+        if (bar) {
+            bar.style.width = percent + "%";
+        }
+    });
+
+    // Update HUD high score
+    const lvlKey = `level${level}`;
+    const bestForCurrent = data[lvlKey] || 0;
+    highUI.textContent = "High Score: " + bestForCurrent;
+}
+
+function updateLevelLocks() {
+    document.querySelectorAll(".level-btn").forEach(btn => {
+        const lvl = parseInt(btn.dataset.level);
+        const lock = btn.querySelector(".level-lock");
+
+        if (unlockedLevels.includes(lvl)) {
+            btn.classList.remove("locked");
+            btn.classList.add("unlocked");
+            if (lock) lock.style.opacity = "0";
+        } else {
+            btn.classList.add("locked");
+            btn.classList.remove("unlocked");
+            if (lock) lock.style.opacity = "1";
+        }
+    });
+
+    localStorage.setItem("unlockedLevels", JSON.stringify(unlockedLevels));
+}
+
+function finalizeRunAndUpdateMenu() {
+    // Add session coins to wallet
+    totalCoins += coins;
+    localStorage.setItem("totalCoins", totalCoins);
+    updateShopCoins();
+
+    const lvlKey = `level${level}`;
+    const runScore = Math.floor(score);
+    const currentBest = levelHighScores[lvlKey] || 0;
+
+    if (runScore > currentBest) {
+        levelHighScores[lvlKey] = runScore;
+        localStorage.setItem("levelHighScores", JSON.stringify(levelHighScores));
+    }
+
+    // Update UI
+    updateLevelBestRuns();
+    updateLevelLocks();
+}
+
+document.querySelectorAll(".shop-card").forEach(card=>{
+  card.addEventListener("click",()=>{
+    const id = card.dataset.id;
+    const cost = Number(card.dataset.cost);
+    const color = Number(card.dataset.color);
+
+    // SELECT
+    if (ownedColors.includes(id)) {
+      selectedColor = id;
+      playerColor = color;
+
+      localStorage.setItem("selectedSkin", id);
+      applySkin(color);
+      updateShopUI();
+      return;
+    }
+
+    // BUY
+    if (totalCoins >= cost) {
+      totalCoins -= cost;
+      ownedColors.push(id);
+
+      localStorage.setItem("totalCoins", totalCoins);
+      localStorage.setItem("ownedSkins", JSON.stringify(ownedColors));
+      localStorage.setItem("selectedSkin", id);
+
+      selectedColor = id;
+      playerColor = color;
+
+      applySkin(color);
+      updateShopUI();
+    } else {
+      alert("Not enough coins!");
+    }
+  });
+});
 
 // BONUS: Add hover glow for menu buttons
 document.querySelectorAll("#menu button, #pauseMenu button").forEach(btn => {
@@ -800,12 +1276,16 @@ document.getElementById("settingsBtn")?.addEventListener("click", () => { docume
 document.getElementById("settingsBtnAlt")?.addEventListener("click", () => { document.getElementById("settingsMenu").style.display = "block"; });
 document.getElementById("closeSettingsBtn")?.addEventListener("click", () => { document.getElementById("settingsMenu").style.display = "none"; });
 
-
-
 // Responsive resize
 window.addEventListener("resize", () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
+
+document.getElementById("shopBtn")?.addEventListener("click", () => {
+    updateShopCoins();
+    document.getElementById("shopMenu").style.display = "block";
+});
+
 
