@@ -93,6 +93,10 @@ const progressContainer = document.getElementById("progressBarContainer");
 
 const shopCoinsUI = document.getElementById("shopCoins");
 
+const aboutBtn = document.getElementById("aboutBtn");
+const aboutMenu = document.getElementById("aboutMenu");
+const closeAboutBtn = document.getElementById("closeAboutBtn");
+
 let inputLocked = false;
 
 // NEON UI COLORS
@@ -140,7 +144,17 @@ function init() {
         });
 
     });
+if (aboutBtn) {
+  aboutBtn.addEventListener("click", () => {
+    aboutMenu.style.display = "block";
+  });
+}
 
+if (closeAboutBtn) {
+  closeAboutBtn.addEventListener("click", () => {
+    aboutMenu.style.display = "none";
+  });
+}
     document.getElementById("restartBtn").addEventListener("click", () => restartCurrentLevel());
     document.getElementById("menuBtn").addEventListener("click", () => returnToMenu());
     document.getElementById("pauseBtn").addEventListener("click", () => pauseGame());
