@@ -111,6 +111,10 @@ const colorMap = {
 
 // SETUP THREE.JS
 function init() {
+
+    bgMusic.currentTime = 0;
+    bgMusic.play();
+
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
     camera.position.set(0, 4, 10);
@@ -323,9 +327,6 @@ function updateParticles() {
 function startGame(selectedLevel = 1) {
     level = selectedLevel;
     applyLevelSettings(level);
-
-    bgMusic.currentTime = 0;
-    bgMusic.play();
 
     currentLane = 1;
     targetX = lanes[currentLane];
@@ -1217,6 +1218,7 @@ document.querySelectorAll("#menu button, #pauseMenu button").forEach(btn => {
 document.getElementById("settingsBtn")?.addEventListener("click", () => { document.getElementById("settingsMenu").style.display = "block"; });
 document.getElementById("settingsBtnAlt")?.addEventListener("click", () => { document.getElementById("settingsMenu").style.display = "block"; });
 document.getElementById("closeSettingsBtn")?.addEventListener("click", () => { document.getElementById("settingsMenu").style.display = "none"; });
+document.getElementById("closeShopBtn")?.addEventListener("click", () => { document.getElementById("shopMenu").style.display = "none"; });
 
 window.addEventListener("resize", () => {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -1224,8 +1226,9 @@ window.addEventListener("resize", () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-document.getElementById("shopBtn")?.addEventListener("click", () => {
+document.getElementById("shopBtnAlt")?.addEventListener("click", () => {
     updateShopCoins();
+    
     document.getElementById("shopMenu").style.display = "block";
 });
 
